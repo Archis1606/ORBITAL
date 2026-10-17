@@ -1,0 +1,32 @@
+@theme {
+  --font-display: "Syne", "Segoe UI", sans-serif;
+  --font-sans: "Manrope", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-void: #05070d;
+  --color-navy: #0a101c;
+  --color-navy-deep: #070b14;
+  --color-panel: #101826;
+  --color-line: rgb(180 210 255 / 0.12);
+  --color-cyan: #3ee0ff;
+  --color-cyan-dim: #1a8aa3;
+  --color-mint: #8fd9c4;
+  --color-violet: #9b8cff;
+  --color-ivory: #e8eef8;
+  --color-muted: #8b97ab;
+  --color-danger: #ff6b7d;
+
+  --shadow-glass: 0 24px 60px rgb(0 0 0 / 0.35);
+}
+
+:root {
+  --bg-void: #05070d;
+  --bg-navy: #0a101c;
+  --accent-cyan: #3ee0ff;
+  --accent-mint: #8fd9c4;
+  --accent-violet: #9b8cff;
+  --text-ivory: #e8eef8;
+  --text-muted: #8b97ab;
+  --grid-line: rgb(180 210 255 / 0.08);
+  --header-h: 4.5rem;
+}
