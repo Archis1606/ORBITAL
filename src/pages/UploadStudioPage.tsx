@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import {
+  fetchPhotosByUserId,
   getLocalUserPhotos,
   saveLocalUserPhoto,
   deleteLocalUserPhoto,
@@ -91,8 +92,24 @@ export function UploadStudioPage() {
 
   // Load existing uploaded user photos
   useEffect(() => {
-    setUserPhotos(getLocalUserPhotos())
-  }, [])
+    let cancelled = false
+    if (isConfigured && user) {
+      fetchPhotosByUserId(user.id, true)
+        .then((photos) => {
+          if (!cancelled) setUserPhotos(photos)
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setGlobalError(error instanceof Error ? error.message : 'Unable to load your published photos.')
+          }
+        })
+    } else {
+      setUserPhotos(getLocalUserPhotos())
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [isConfigured, user])
 
   const activeItem = queue.find((q) => q.id === activeQueueId) || queue[0] || null
 
@@ -119,7 +136,7 @@ export function UploadStudioPage() {
         return // skip duplicate
       }
 
-      const id = 'upload-' + Math.random().toString(36).substring(2, 9)
+      const id = crypto.randomUUID()
       const previewUrl = URL.createObjectURL(file)
 
       // Load image dimensions
@@ -226,101 +243,107 @@ export function UploadStudioPage() {
   // Publish active photo
   const handlePublish = async (asDraft = false) => {
     if (!activeItem) return
+    if (isConfigured && !user) {
+      setGlobalError('Sign in before publishing photos to your permanent profile.')
+      return
+    }
+    setGlobalError(null)
 
-    // Update status to uploading
     setQueue((prev) =>
       prev.map((item) => (item.id === activeItem.id ? { ...item, status: 'uploading', progress: 30 } : item)),
     )
 
     let finalImageUrl = activeItem.previewUrl
+    let persistedImageUrl = activeItem.previewUrl
     let storagePath: string | null = null
+    const targetBucket = asDraft ? 'private-photos' : 'photos'
+    const existingRecord = userPhotos.find((photo) => photo.id === activeItem.id)
+    const previousBucket = existingRecord?.storageBucket || 'photos'
 
-    // If Supabase Storage is configured, upload to 'photos' bucket
-    if (isConfigured && user) {
-      try {
-        const fileExt = activeItem.fileName.split('.').pop()
+    try {
+      if (isConfigured && user) {
+        const fileExt = activeItem.fileName.split('.').pop()?.toLowerCase() || 'jpg'
         storagePath = `${user.id}/${activeItem.id}.${fileExt}`
-
         const { error: uploadError } = await supabase.storage
-          .from('photos')
-          .upload(storagePath, activeItem.file, { upsert: true })
+          .from(targetBucket)
+          .upload(storagePath, activeItem.file, { contentType: activeItem.file.type, upsert: true })
+        if (uploadError) throw new Error(uploadError.message)
 
-        if (!uploadError) {
-          const { data } = supabase.storage.from('photos').getPublicUrl(storagePath)
-          if (data?.publicUrl) finalImageUrl = data.publicUrl
+        const { data: publicUrlData } = supabase.storage.from(targetBucket).getPublicUrl(storagePath)
+        if (!publicUrlData.publicUrl) throw new Error('Supabase did not return a photo URL.')
+        persistedImageUrl = publicUrlData.publicUrl
+        finalImageUrl = publicUrlData.publicUrl
+        if (targetBucket === 'private-photos') {
+          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from('private-photos')
+            .createSignedUrl(storagePath, 60 * 60)
+          if (signedUrlError) throw new Error(signedUrlError.message)
+          finalImageUrl = signedUrlData.signedUrl
         }
         setQueue((prev) =>
           prev.map((item) => (item.id === activeItem.id ? { ...item, progress: 75 } : item)),
         )
-      } catch {
-        // Fall back to local URL
       }
-    }
 
-    // Build Photo object
-    const newPhoto: Photo = {
-      id: activeItem.id,
-      userId: user?.id,
-      title: activeItem.title || 'Untitled Observation',
-      discipline: activeItem.discipline,
-      caption: activeItem.caption,
-      categoryTag: activeItem.categoryTag,
-      tags: [activeItem.categoryTag, activeItem.discipline],
-      location: activeItem.locationName || 'Unspecified Observation Vantage',
-      capturedAt: activeItem.capturedAt,
-      camera: activeItem.camera || 'Standard Sensor',
-      optics: activeItem.optics || 'Optical Assembly',
-      exposure: activeItem.exposure || 'N/A',
-      creatorId: profile?.handle || user?.id || 'creator-nova-ellison',
-      unsplashId: '',
-      customImageUrl: finalImageUrl,
-      imageAlt: activeItem.title,
-      width: activeItem.width,
-      height: activeItem.height,
-      featured: false,
-      sample: 'USER',
-      likesCount: 0,
-      viewsCount: 1,
-      status: asDraft ? 'draft' : 'published',
-      license: activeItem.license,
-      locationCoordinates: activeItem.allowLocationSharing
-        ? { latitude: 35.0, longitude: -115.0, allowLocationSharing: true }
-        : undefined,
-      exif: {
-        camera: activeItem.camera,
-        lens: activeItem.optics,
-        exposure: activeItem.exposure,
-      },
-      astro:
-        activeItem.discipline === 'astrophotography'
-          ? {
-              target: activeItem.astroTarget,
-              telescope: activeItem.astroTelescope,
-              mount: activeItem.astroMount,
-              filters: activeItem.astroFilters,
-              exposureIntegration: activeItem.astroIntegration,
-              bortleClass: activeItem.astroBortle,
-              processingNotes: activeItem.astroNotes,
-            }
-          : undefined,
-      aviation:
-        activeItem.discipline === 'aviation'
-          ? {
-              aircraftType: activeItem.aviationAircraftType,
-              manufacturer: activeItem.aviationManufacturer,
-              airline: activeItem.aviationAirline,
-              airportCode: activeItem.aviationAirportCode,
-              registration: activeItem.aviationRegistration,
-              flightConditions: activeItem.aviationConditions,
-            }
-          : undefined,
-    }
+      const newPhoto: Photo = {
+        id: activeItem.id,
+        userId: user?.id,
+        title: activeItem.title || 'Untitled Observation',
+        discipline: activeItem.discipline,
+        caption: activeItem.caption,
+        categoryTag: activeItem.categoryTag,
+        tags: [activeItem.categoryTag, activeItem.discipline],
+        location: activeItem.allowLocationSharing ? activeItem.locationName : '',
+        capturedAt: activeItem.capturedAt,
+        camera: activeItem.camera || 'Standard Sensor',
+        optics: activeItem.optics || 'Optical Assembly',
+        exposure: activeItem.exposure || 'N/A',
+        creatorId: profile?.handle || user?.id || 'creator-nova-ellison',
+        unsplashId: '',
+        customImageUrl: finalImageUrl,
+        storagePath: storagePath || undefined,
+        storageBucket: isConfigured ? targetBucket : undefined,
+        imageAlt: activeItem.title,
+        width: activeItem.width,
+        height: activeItem.height,
+        featured: false,
+        sample: 'USER',
+        likesCount: 0,
+        viewsCount: 1,
+        status: asDraft ? 'draft' : 'published',
+        license: activeItem.license,
+        exif: {
+          camera: activeItem.camera,
+          lens: activeItem.optics,
+          exposure: activeItem.exposure,
+        },
+        astro:
+          activeItem.discipline === 'astrophotography'
+            ? {
+                target: activeItem.astroTarget,
+                telescope: activeItem.astroTelescope,
+                mount: activeItem.astroMount,
+                filters: activeItem.astroFilters,
+                exposureIntegration: activeItem.astroIntegration,
+                bortleClass: activeItem.astroBortle,
+                processingNotes: activeItem.astroNotes,
+              }
+            : undefined,
+        aviation:
+          activeItem.discipline === 'aviation'
+            ? {
+                aircraftType: activeItem.aviationAircraftType,
+                manufacturer: activeItem.aviationManufacturer,
+                airline: activeItem.aviationAirline,
+                airportCode: activeItem.aviationAirportCode,
+                registration: activeItem.aviationRegistration,
+                flightConditions: activeItem.aviationConditions,
+              }
+            : undefined,
+      }
 
-    // Save to Supabase DB if configured
-    if (isConfigured && user) {
-      try {
-        await supabase.from('photos').insert({
-          id: newPhoto.id,
+      if (isConfigured && user) {
+        const photoPayload = {
           user_id: user.id,
           title: newPhoto.title,
           caption: newPhoto.caption,
@@ -328,38 +351,103 @@ export function UploadStudioPage() {
           category_tag: newPhoto.categoryTag || null,
           tags: newPhoto.tags,
           storage_path: storagePath,
-          image_url: finalImageUrl,
+          storage_bucket: targetBucket,
+          image_url: persistedImageUrl,
           width: newPhoto.width,
           height: newPhoto.height,
           camera: newPhoto.camera,
           optics: newPhoto.optics,
           exposure: newPhoto.exposure,
           captured_at: newPhoto.capturedAt,
-          location_name: newPhoto.location,
+          location_name: newPhoto.location || null,
+          allow_location_sharing: activeItem.allowLocationSharing,
+          astro_target: activeItem.astroTarget || null,
+          astro_telescope: activeItem.astroTelescope || null,
+          astro_mount: activeItem.astroMount || null,
+          astro_filters: activeItem.astroFilters || null,
+          astro_integration: activeItem.astroIntegration || null,
+          astro_bortle: activeItem.discipline === 'astrophotography' ? activeItem.astroBortle : null,
+          astro_notes: activeItem.astroNotes || null,
+          aviation_aircraft_type: activeItem.discipline === 'aviation' ? activeItem.aviationAircraftType : null,
+          aviation_manufacturer: activeItem.discipline === 'aviation' ? activeItem.aviationManufacturer : null,
+          aviation_airline: activeItem.aviationAirline || null,
+          aviation_airport_code: activeItem.aviationAirportCode || null,
+          aviation_registration: activeItem.aviationRegistration || null,
+          aviation_conditions: activeItem.aviationConditions || null,
           status: newPhoto.status,
           license: newPhoto.license,
-        } as unknown as never)
-      } catch {
-        // Fallback to local
+        }
+        const existingPhoto = userPhotos.some((photo) => photo.id === newPhoto.id)
+        const saveResult = existingPhoto
+          ? await supabase.from('photos').update(photoPayload as unknown as never).eq('id', newPhoto.id).eq('user_id', user.id)
+          : await supabase.from('photos').insert({ id: newPhoto.id, ...photoPayload } as unknown as never)
+
+        if (saveResult.error) {
+          if (storagePath && (!existingPhoto || previousBucket !== targetBucket)) {
+            const { error: cleanupError } = await supabase.storage.from(targetBucket).remove([storagePath])
+            if (cleanupError) {
+              throw new Error(`${saveResult.error.message}. Uploaded file cleanup failed: ${cleanupError.message}`)
+            }
+          }
+          throw new Error(saveResult.error.message)
+        }
+        if (existingRecord && previousBucket !== targetBucket) {
+          const previousPath = existingRecord.storagePath || storagePath
+          if (!previousPath) {
+            setGlobalError('Photo was saved, but its previous image path could not be determined.')
+          } else {
+            const { error: cleanupError } = await supabase.storage.from(previousBucket).remove([previousPath])
+            if (cleanupError) {
+              setGlobalError(`Photo was saved, but its previous image could not be removed: ${cleanupError.message}`)
+            }
+          }
+        }
       }
+
+      if (isConfigured) {
+        setUserPhotos((current) => [newPhoto, ...current.filter((photo) => photo.id !== newPhoto.id)])
+      } else {
+        saveLocalUserPhoto(newPhoto)
+        setUserPhotos(getLocalUserPhotos())
+      }
+
+      setQueue((prev) =>
+        prev.map((item) =>
+          item.id === activeItem.id
+            ? { ...item, status: asDraft ? 'draft' : 'published', progress: 100 }
+            : item,
+        ),
+      )
+    } catch (error: unknown) {
+      setGlobalError(error instanceof Error ? error.message : 'Unable to publish this photo.')
+      setQueue((prev) =>
+        prev.map((item) => (item.id === activeItem.id ? { ...item, status: 'error', progress: 0 } : item)),
+      )
     }
-
-    // Save to local storage for immediate accessibility
-    saveLocalUserPhoto(newPhoto)
-    setUserPhotos(getLocalUserPhotos())
-
-    setQueue((prev) =>
-      prev.map((item) =>
-        item.id === activeItem.id
-          ? { ...item, status: asDraft ? 'draft' : 'published', progress: 100 }
-          : item,
-      ),
-    )
   }
 
-  const handleDeletePhoto = (id: string) => {
-    deleteLocalUserPhoto(id)
-    setUserPhotos(getLocalUserPhotos())
+  const handleDeletePhoto = async (id: string) => {
+    const photo = userPhotos.find((item) => item.id === id)
+    if (isConfigured && user) {
+      const { error } = await supabase.from('photos').delete().eq('id', id).eq('user_id', user.id)
+      if (error) {
+        setGlobalError(error.message)
+        return
+      }
+      const storagePath =
+        photo?.storagePath ||
+        photo?.customImageUrl?.split(`/storage/v1/object/public/${photo.storageBucket || 'photos'}/`)[1]?.split('?')[0]
+      if (storagePath && photo?.storageBucket) {
+        const { error: storageError } = await supabase.storage.from(photo.storageBucket).remove([storagePath])
+        if (storageError) {
+          setGlobalError(`Photo was deleted, but its stored image could not be removed: ${storageError.message}`)
+        }
+      }
+      setUserPhotos((current) => current.filter((item) => item.id !== id))
+    } else {
+      deleteLocalUserPhoto(id)
+      setUserPhotos(getLocalUserPhotos())
+    }
     setDeleteConfirmId(null)
   }
 
@@ -890,6 +978,12 @@ export function UploadStudioPage() {
                     <p className="font-mono text-[0.65rem] text-muted capitalize">
                       {photo.discipline} · {photo.status}
                     </p>
+                    <Link
+                      to={`/photos/${photo.id}`}
+                      className="mt-1 inline-flex font-mono text-[0.65rem] text-cyan hover:underline"
+                    >
+                      View / share
+                    </Link>
                   </div>
                   <button
                     type="button"

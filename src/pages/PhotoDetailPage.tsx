@@ -24,10 +24,11 @@ import { FavoriteButton } from '@/components/ui/FavoriteButton'
 import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { BeforeAfterSlider } from '@/components/ui/BeforeAfterSlider'
 import { getAllAvailablePhotos, getPhotoById } from '@/services/photoService'
+import { findCreatorByUserId } from '@/services/creatorService'
 import { photoCreator } from '@/data/photos'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { disciplineLabel, formatCaptureDate } from '@/lib/format'
-import type { Photo } from '@/types/models'
+import type { Creator, Photo } from '@/types/models'
 import { cn } from '@/lib/cn'
 
 export function PhotoDetailPage() {
@@ -35,6 +36,9 @@ export function PhotoDetailPage() {
   const navigate = useNavigate()
   const [photo, setPhoto] = useState<Photo | undefined>()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [remoteCreator, setRemoteCreator] = useState<Creator | undefined>()
+  const [creatorLoadError, setCreatorLoadError] = useState<string | null>(null)
 
   // Viewer display state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -51,23 +55,51 @@ export function PhotoDetailPage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setLoadError(null)
     if (photoId) {
-      getPhotoById(photoId).then((found) => {
-        if (!cancelled) {
-          setPhoto(found)
-          setLoading(false)
-          // Reset zoom and pan on photo change
-          setZoomLevel(1)
-          setPan({ x: 0, y: 0 })
-        }
-      })
+      getPhotoById(photoId)
+        .then((found) => {
+          if (!cancelled) {
+            setPhoto(found)
+            setLoading(false)
+            setZoomLevel(1)
+            setPan({ x: 0, y: 0 })
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setLoadError(error instanceof Error ? error.message : 'Unable to load this photo.')
+            setPhoto(undefined)
+            setLoading(false)
+          }
+        })
     }
     return () => {
       cancelled = true
     }
   }, [photoId])
 
-  const creator = photo ? photoCreator(photo) : undefined
+  useEffect(() => {
+    let cancelled = false
+    setRemoteCreator(undefined)
+    setCreatorLoadError(null)
+    if (photo?.userId) {
+      findCreatorByUserId(photo.userId)
+        .then((found) => {
+          if (!cancelled) setRemoteCreator(found)
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setCreatorLoadError(error instanceof Error ? error.message : 'Unable to load the photographer profile.')
+          }
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [photo?.userId])
+
+  const creator = remoteCreator ?? (photo ? photoCreator(photo) : undefined)
 
   useDocumentTitle(photo ? `${photo.title} — ORBITAL` : 'Observing Frame — ORBITAL')
 
@@ -208,7 +240,7 @@ export function PhotoDetailPage() {
       <div className="mx-auto max-w-4xl px-4 py-24 text-center">
         <ErrorState
           title="Frame identifier not registered"
-          body="The requested catalog frame could not be resolved from local or remote repositories."
+          body={loadError || 'The requested catalog frame could not be resolved from local or remote repositories.'}
         />
         <div className="mt-6">
           <Link
@@ -249,7 +281,7 @@ export function PhotoDetailPage() {
               <p className="truncate font-mono text-[0.68rem] text-muted">
                 by {creator.displayName} · @{creator.handle}
               </p>
-            ) : null}
+            ) : creatorLoadError ? <p className="truncate font-mono text-[0.68rem] text-danger">{creatorLoadError}</p> : null}
           </div>
         </div>
 
@@ -508,6 +540,8 @@ export function PhotoDetailPage() {
                       </div>
                     </Link>
                   </div>
+                ) : creatorLoadError ? (
+                  <p role="alert" className="font-mono text-xs text-danger">{creatorLoadError}</p>
                 ) : null}
 
                 {/* EXIF Data */}

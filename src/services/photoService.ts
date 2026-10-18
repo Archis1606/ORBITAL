@@ -2,10 +2,94 @@ import { photos as fixturePhotos } from '@/data/photos'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import type { ArchiveFilterState, Collection, Photo } from '@/types/models'
 import { collections as fixtureCollections } from '@/data/collections'
+import type { Database } from '@/types/database'
 
 const LOCAL_USER_PHOTOS_KEY = 'orbital.user.photos'
 const LOCAL_COLLECTIONS_KEY = 'orbital.user.collections'
 const LOCAL_FOLLOWS_KEY = 'orbital.follows'
+type PhotoRow = Database['public']['Tables']['photos']['Row']
+
+function mapPhotoRow(row: PhotoRow): Photo {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    discipline: row.discipline,
+    caption: row.caption || '',
+    categoryTag: row.category_tag || undefined,
+    tags: row.tags || [],
+    location: row.allow_location_sharing ? row.location_name || '' : '',
+    capturedAt: row.captured_at || '',
+    camera: row.camera || '',
+    optics: row.optics || '',
+    exposure: row.exposure || '',
+    creatorId: row.user_id,
+    unsplashId: '',
+    customImageUrl: row.image_url,
+    storagePath: row.storage_path || undefined,
+    storageBucket: row.storage_bucket || 'photos',
+    thumbnailUrl: row.thumbnail_url || undefined,
+    imageAlt: row.title,
+    width: row.width || 1920,
+    height: row.height || 1080,
+    featured: row.featured,
+    sample: 'USER',
+    likesCount: row.likes_count,
+    viewsCount: row.views_count,
+    status: row.status,
+    license: row.license,
+    locationCoordinates:
+      row.allow_location_sharing && row.latitude !== null && row.longitude !== null
+        ? {
+            latitude: row.latitude,
+            longitude: row.longitude,
+            allowLocationSharing: true,
+          }
+        : undefined,
+    exif: {
+      camera: row.camera || undefined,
+      lens: row.optics || undefined,
+      exposure: row.exposure || undefined,
+    },
+    astro:
+      row.discipline === 'astrophotography'
+        ? {
+            target: row.astro_target || undefined,
+            telescope: row.astro_telescope || undefined,
+            mount: row.astro_mount || undefined,
+            filters: row.astro_filters || undefined,
+            exposureIntegration: row.astro_integration || undefined,
+            bortleClass: row.astro_bortle || undefined,
+            processingNotes: row.astro_notes || undefined,
+          }
+        : undefined,
+    aviation:
+      row.discipline === 'aviation'
+        ? {
+            aircraftType: row.aviation_aircraft_type || undefined,
+            manufacturer: row.aviation_manufacturer || undefined,
+            airline: row.aviation_airline || undefined,
+            airportCode: row.aviation_airport_code || undefined,
+            airportName: row.aviation_airport_name || undefined,
+            country: row.aviation_country || undefined,
+            registration: row.aviation_registration || undefined,
+            flightConditions: row.aviation_conditions || undefined,
+          }
+        : undefined,
+  }
+}
+
+async function mapAccessiblePhoto(row: PhotoRow): Promise<Photo> {
+  const photo = mapPhotoRow(row)
+  if (photo.storageBucket === 'private-photos' && photo.storagePath) {
+    const { data, error } = await supabase.storage
+      .from('private-photos')
+      .createSignedUrl(photo.storagePath, 60 * 60)
+    if (error) throw new Error(error.message)
+    photo.customImageUrl = data.signedUrl
+  }
+  return photo
+}
 
 // Helper to get locally stored user-created photos
 export function getLocalUserPhotos(): Photo[] {
@@ -113,64 +197,7 @@ export async function fetchFilteredPhotos(filters: ArchiveFilterState): Promise<
       const { data, count, error } = await query
 
       if (!error && data && data.length > 0) {
-        // Map database row to Photo model
-        type PhotoRow = import('@/types/database').Database['public']['Tables']['photos']['Row']
-        const mappedPhotos: Photo[] = (data as unknown as PhotoRow[]).map((row) => ({
-          id: row.id,
-          userId: row.user_id,
-          title: row.title,
-          discipline: row.discipline,
-          caption: row.caption || '',
-          categoryTag: row.category_tag || undefined,
-          tags: row.tags || [],
-          location: row.location_name || '',
-          capturedAt: row.captured_at || '',
-          camera: row.camera || '',
-          optics: row.optics || '',
-          exposure: row.exposure || '',
-          creatorId: row.user_id,
-          unsplashId: '',
-          customImageUrl: row.image_url,
-          thumbnailUrl: row.thumbnail_url || undefined,
-          imageAlt: row.title,
-          width: row.width || 1920,
-          height: row.height || 1080,
-          featured: row.featured,
-          sample: 'USER',
-          likesCount: row.likes_count,
-          viewsCount: row.views_count,
-          status: row.status,
-          license: row.license,
-          locationCoordinates: row.latitude && row.longitude ? {
-            latitude: row.latitude,
-            longitude: row.longitude,
-            allowLocationSharing: row.allow_location_sharing,
-          } : undefined,
-          exif: {
-            camera: row.camera || undefined,
-            lens: row.optics || undefined,
-            exposure: row.exposure || undefined,
-          },
-          astro: row.discipline === 'astrophotography' ? {
-            target: row.astro_target || undefined,
-            telescope: row.astro_telescope || undefined,
-            mount: row.astro_mount || undefined,
-            filters: row.astro_filters || undefined,
-            exposureIntegration: row.astro_integration || undefined,
-            bortleClass: row.astro_bortle || undefined,
-            processingNotes: row.astro_notes || undefined,
-          } : undefined,
-          aviation: row.discipline === 'aviation' ? {
-            aircraftType: row.aviation_aircraft_type || undefined,
-            manufacturer: row.aviation_manufacturer || undefined,
-            airline: row.aviation_airline || undefined,
-            airportCode: row.aviation_airport_code || undefined,
-            airportName: row.aviation_airport_name || undefined,
-            country: row.aviation_country || undefined,
-            registration: row.aviation_registration || undefined,
-            flightConditions: row.aviation_conditions || undefined,
-          } : undefined,
-        }))
+        const mappedPhotos = (data as unknown as PhotoRow[]).map(mapPhotoRow)
 
         const total = count || mappedPhotos.length
         const totalPages = Math.ceil(total / pageSize)
@@ -290,68 +317,24 @@ export async function getPhotoById(id: string): Promise<Photo | undefined> {
   if (found) return found
 
   if (isSupabaseConfigured()) {
-    try {
-      const { data, error } = await supabase.from('photos').select('*').eq('id', id).single()
-      if (!error && data) {
-        type PhotoRow = import('@/types/database').Database['public']['Tables']['photos']['Row']
-        const row = data as unknown as PhotoRow
-        return {
-          id: row.id,
-          userId: row.user_id,
-          title: row.title,
-          discipline: row.discipline,
-          caption: row.caption || '',
-          categoryTag: row.category_tag || undefined,
-          tags: row.tags || [],
-          location: row.location_name || '',
-          capturedAt: row.captured_at || '',
-          camera: row.camera || '',
-          optics: row.optics || '',
-          exposure: row.exposure || '',
-          creatorId: row.user_id,
-          unsplashId: '',
-          customImageUrl: row.image_url,
-          imageAlt: row.title,
-          width: row.width || 1920,
-          height: row.height || 1080,
-          featured: row.featured,
-          sample: 'USER',
-          likesCount: row.likes_count,
-          viewsCount: row.views_count,
-          status: row.status,
-          license: row.license,
-          exif: {
-            camera: row.camera || undefined,
-            lens: row.optics || undefined,
-            exposure: row.exposure || undefined,
-          },
-          astro: row.discipline === 'astrophotography' ? {
-            target: row.astro_target || undefined,
-            telescope: row.astro_telescope || undefined,
-            mount: row.astro_mount || undefined,
-            filters: row.astro_filters || undefined,
-            exposureIntegration: row.astro_integration || undefined,
-            bortleClass: row.astro_bortle || undefined,
-            processingNotes: row.astro_notes || undefined,
-          } : undefined,
-          aviation: row.discipline === 'aviation' ? {
-            aircraftType: row.aviation_aircraft_type || undefined,
-            manufacturer: row.aviation_manufacturer || undefined,
-            airline: row.aviation_airline || undefined,
-            airportCode: row.aviation_airport_code || undefined,
-            airportName: row.aviation_airport_name || undefined,
-            country: row.aviation_country || undefined,
-            registration: row.aviation_registration || undefined,
-            flightConditions: row.aviation_conditions || undefined,
-          } : undefined,
-        }
-      }
-    } catch {
-      // Ignore
-    }
+    const { data, error } = await supabase.from('photos').select('*').eq('id', id).maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? mapAccessiblePhoto(data as unknown as PhotoRow) : undefined
   }
 
   return undefined
+}
+
+export async function fetchPhotosByUserId(userId: string, includeUnpublished = false): Promise<Photo[]> {
+  if (!isSupabaseConfigured()) {
+    return getLocalUserPhotos().filter((photo) => photo.userId === userId)
+  }
+
+  let query = supabase.from('photos').select('*').eq('user_id', userId)
+  if (!includeUnpublished) query = query.eq('status', 'published')
+  const { data, error } = await query.order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return Promise.all((data ?? []).map((row) => mapAccessiblePhoto(row as unknown as PhotoRow)))
 }
 
 // User collections management

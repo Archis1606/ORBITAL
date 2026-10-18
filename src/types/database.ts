@@ -66,6 +66,7 @@ export interface Database {
           category_tag: string | null
           tags: string[]
           storage_path: string | null
+          storage_bucket: 'photos' | 'private-photos'
           image_url: string
           thumbnail_url: string | null
           width: number
@@ -113,6 +114,7 @@ export interface Database {
           category_tag?: string | null
           tags?: string[]
           storage_path?: string | null
+          storage_bucket?: 'photos' | 'private-photos'
           image_url: string
           thumbnail_url?: string | null
           width?: number
@@ -157,6 +159,7 @@ export interface Database {
           category_tag?: string | null
           tags?: string[]
           storage_path?: string | null
+          storage_bucket?: 'photos' | 'private-photos'
           image_url?: string
           thumbnail_url?: string | null
           width?: number

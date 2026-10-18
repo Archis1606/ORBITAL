@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   UserPlus,
   UserCheck,
@@ -20,15 +20,18 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { PhotoGrid } from '@/components/ui/PhotoGrid'
 import { useAuth } from '@/context/AuthContext'
 import { getCreatorByHandle } from '@/data/creators'
-import { getAllAvailablePhotos, getFollowingIds, toggleFollowUser, getStoredCollections } from '@/services/photoService'
+import { fetchPhotosByUserId, getAllAvailablePhotos, getFollowingIds, toggleFollowUser, getStoredCollections } from '@/services/photoService'
+import { findCreatorByHandle, getCreatorFollowState, toggleCreatorFollow } from '@/services/creatorService'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { disciplineLabel } from '@/lib/format'
-import type { Creator } from '@/types/models'
+import type { Creator, Photo } from '@/types/models'
 import { cn } from '@/lib/cn'
 
 export function ProfilePage() {
   const { handle } = useParams<{ handle: string }>()
   const { user, profile: authProfile, updateProfile } = useAuth()
+  const navigate = useNavigate()
 
   // Find creator in static list or dynamically from current auth user
   const initialCreator = useMemo(() => {
@@ -69,6 +72,10 @@ export function ProfilePage() {
   const [isFollowing, setIsFollowing] = useState(false)
   const [followerCount, setFollowerCount] = useState(initialCreator?.stats?.followersCount || 0)
   const [isEditing, setIsEditing] = useState(false)
+  const [creatorLoading, setCreatorLoading] = useState(Boolean(handle))
+  const [followLoading, setFollowLoading] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [authorPhotos, setAuthorPhotos] = useState<Photo[]>([])
 
   // Edit form state
   const [editName, setEditName] = useState('')
@@ -80,32 +87,86 @@ export function ProfilePage() {
   const [editWebsite, setEditWebsite] = useState('')
 
   useEffect(() => {
+    let cancelled = false
     setCreator(initialCreator)
-    if (initialCreator) {
-      setFollowerCount(initialCreator.stats?.followersCount || 0)
-      setIsFollowing(getFollowingIds().includes(initialCreator.id))
-      setEditName(initialCreator.displayName)
-      setEditBio(initialCreator.bio)
-      setEditLocation(initialCreator.location)
-      setEditAvatar(initialCreator.avatarUrl || '')
-      setEditTwitter(initialCreator.socialLinks?.twitter || '')
-      setEditInstagram(initialCreator.socialLinks?.instagram || '')
-      setEditWebsite(initialCreator.socialLinks?.website || '')
+    setCreatorLoading(Boolean(handle))
+    setProfileError(null)
+
+    const loadCreator = async () => {
+      try {
+        const remoteCreator = handle ? await findCreatorByHandle(handle) : undefined
+        if (cancelled) return
+        const resolvedCreator = remoteCreator ?? initialCreator
+        setCreator(resolvedCreator)
+        if (resolvedCreator) {
+          setFollowerCount(resolvedCreator.stats?.followersCount || 0)
+          setIsFollowing(getFollowingIds().includes(resolvedCreator.id))
+          setEditName(resolvedCreator.displayName)
+          setEditBio(resolvedCreator.bio)
+          setEditLocation(resolvedCreator.location)
+          setEditAvatar(resolvedCreator.avatarUrl || '')
+          setEditTwitter(resolvedCreator.socialLinks?.twitter || '')
+          setEditInstagram(resolvedCreator.socialLinks?.instagram || '')
+          setEditWebsite(resolvedCreator.socialLinks?.website || '')
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setProfileError(error instanceof Error ? error.message : 'Unable to load this profile.')
+        }
+      } finally {
+        if (!cancelled) setCreatorLoading(false)
+      }
     }
-  }, [initialCreator])
+
+    void loadCreator()
+    return () => {
+      cancelled = true
+    }
+  }, [handle, initialCreator])
+
+  useEffect(() => {
+    if (!creator) {
+      setAuthorPhotos([])
+      return
+    }
+
+    let cancelled = false
+    const loadCommunityData = async () => {
+      const localPhotos = getAllAvailablePhotos().filter(
+        (photo) =>
+          photo.creatorId === creator.id ||
+          (creator.handle && photo.creatorId.toLowerCase() === creator.handle.toLowerCase()) ||
+          (creator.userId && photo.userId === creator.userId),
+      )
+      try {
+        if (creator.userId && isSupabaseConfigured()) {
+          const [photos, followState] = await Promise.all([
+            fetchPhotosByUserId(creator.userId),
+            getCreatorFollowState(creator.userId, user?.id),
+          ])
+          if (!cancelled) {
+            setAuthorPhotos(photos)
+            setFollowerCount(followState.followers)
+            setIsFollowing(followState.following)
+          }
+        } else if (!cancelled) {
+          setAuthorPhotos(localPhotos)
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setProfileError(error instanceof Error ? error.message : 'Unable to load this profile.')
+          setAuthorPhotos(localPhotos)
+        }
+      }
+    }
+
+    void loadCommunityData()
+    return () => {
+      cancelled = true
+    }
+  }, [creator, user?.id])
 
   useDocumentTitle(creator ? `${creator.displayName} (@${creator.handle}) — ORBITAL` : 'Photographer Profile — ORBITAL')
-
-  // Retrieve photos attributed to this creator
-  const allPhotos = getAllAvailablePhotos()
-  const authorPhotos = useMemo(() => {
-    if (!creator) return []
-    return allPhotos.filter(
-      (photo) =>
-        photo.creatorId === creator.id ||
-        (creator.handle && photo.creatorId.toLowerCase() === creator.handle.toLowerCase()),
-    )
-  }, [allPhotos, creator])
 
   // Retrieve public collections created by this creator
   const allCollections = getStoredCollections()
@@ -125,17 +186,47 @@ export function ProfilePage() {
   )
 
   // Toggle follow
-  const handleToggleFollow = () => {
+  const handleToggleFollow = async () => {
     if (!creator) return
-    const nowFollowing = toggleFollowUser(creator.id)
-    setIsFollowing(nowFollowing)
-    setFollowerCount((prev) => (nowFollowing ? prev + 1 : Math.max(0, prev - 1)))
+    if (!user) {
+      navigate('/auth')
+      return
+    }
+
+    setFollowLoading(true)
+    setProfileError(null)
+    try {
+      const nowFollowing =
+        isSupabaseConfigured() && creator.userId
+          ? await toggleCreatorFollow(user.id, creator.userId, isFollowing)
+          : toggleFollowUser(creator.id)
+      setIsFollowing(nowFollowing)
+      setFollowerCount((prev) => (nowFollowing ? prev + 1 : Math.max(0, prev - 1)))
+    } catch (error: unknown) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to update follow status.')
+    } finally {
+      setFollowLoading(false)
+    }
   }
 
   // Save profile edits
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!creator) return
+
+    const result = await updateProfile({
+      display_name: editName,
+      bio: editBio,
+      location: editLocation,
+      avatar_url: editAvatar || null,
+      social_twitter: editTwitter || null,
+      social_instagram: editInstagram || null,
+      social_website: editWebsite || null,
+    })
+    if (result.error) {
+      setProfileError(result.error)
+      return
+    }
 
     const updated = {
       ...creator,
@@ -152,18 +243,12 @@ export function ProfilePage() {
 
     setCreator(updated)
 
-    // Save to auth context if logged in
-    await updateProfile({
-      display_name: editName,
-      bio: editBio,
-      location: editLocation,
-      avatar_url: editAvatar || null,
-      social_twitter: editTwitter || null,
-      social_instagram: editInstagram || null,
-      social_website: editWebsite || null,
-    })
-
+    setProfileError(null)
     setIsEditing(false)
+  }
+
+  if (!creator && creatorLoading) {
+    return <div className="mx-auto max-w-4xl px-4 py-24 text-center font-mono text-sm text-muted">Loading observer profile…</div>
   }
 
   if (!creator) {
@@ -171,7 +256,7 @@ export function ProfilePage() {
       <div className="mx-auto max-w-4xl px-4 py-24 text-center">
         <ErrorState
           title="Photographer profile not located"
-          body="No active observatory observer is registered under that handle."
+          body={profileError || 'No active observatory observer is registered under that handle.'}
         />
         <div className="mt-6">
           <Link
@@ -255,6 +340,7 @@ export function ProfilePage() {
               <button
                 type="button"
                 onClick={handleToggleFollow}
+                disabled={followLoading}
                 className={cn(
                   'inline-flex items-center gap-2 rounded-full px-5 py-2.5 font-mono text-xs transition-all shadow-md',
                   isFollowing
@@ -263,11 +349,15 @@ export function ProfilePage() {
                 )}
               >
                 {isFollowing ? <UserCheck size={14} /> : <UserPlus size={14} />}
-                <span>{isFollowing ? 'Following' : 'Follow Observer'}</span>
+                <span>{followLoading ? 'Updating…' : isFollowing ? 'Following' : 'Follow Observer'}</span>
               </button>
             )}
           </div>
         </div>
+
+        {profileError ? (
+          <p role="alert" className="mt-4 font-mono text-xs text-danger">{profileError}</p>
+        ) : null}
 
         {/* Bio */}
         <p className="mt-6 max-w-3xl text-sm leading-relaxed text-muted font-sans sm:text-base">

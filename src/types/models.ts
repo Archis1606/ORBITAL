@@ -128,6 +128,8 @@ export type Photo = {
   creatorId: string
   unsplashId: string
   customImageUrl?: string // When uploaded via Creator Studio / Supabase Storage
+  storagePath?: string
+  storageBucket?: 'photos' | 'private-photos'
   thumbnailUrl?: string
   imageAlt: string
   width: number

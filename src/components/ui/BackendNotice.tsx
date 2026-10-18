@@ -27,8 +27,7 @@ export function BackendNotice() {
       </div>
       <p className="mt-2 font-medium text-sm text-ivory">Supabase Credentials Not Yet Configured</p>
       <p className="mt-1 text-xs text-muted leading-relaxed">
-        ORBITAL is running with full catalog exploration, local draft uploads, and browser persistence.
-        To link your live database, copy <code className="text-cyan">.env.example</code> to <code className="text-cyan">.env</code> with your project URL & public anon key.
+        ORBITAL is using browser-only demo data. Configure the Supabase URL and public anon key locally or in Vercel to enable permanent accounts, profiles, follows, and photo uploads.
       </p>
     </aside>
   )

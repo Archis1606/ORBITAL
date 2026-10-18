@@ -14,32 +14,15 @@ When Supabase credentials are not configured, ORBITAL runs gracefully in an offl
 
 ### Step 2: Apply Database Migrations
 1. In the Supabase Dashboard, navigate to the **SQL Editor**.
-2. Open or paste the contents of `supabase/migrations/20260401000000_orbital_schema.sql`.
-3. Click **Run**. This will create:
+2. Run `supabase/migrations/20260401000000_orbital_schema.sql` first, then `supabase/migrations/20261018000000_social_persistence.sql`.
+3. Click **Run** after each migration. The initial migration creates:
    - Tables: `profiles`, `photos`, `tags`, `photo_tags`, `collections`, `collection_photos`, `favorites`, `follows`.
    - Optimized B-tree indexes for fast filtered searches.
    - Triggers for auto-creating photographer profiles on user sign-up.
    - Comprehensive Row-Level Security (RLS) policies.
+4. The second migration creates/configures a public `photos` bucket for published images and a private `private-photos` bucket for drafts. Both buckets enforce owner-only writes; draft image URLs are short-lived signed URLs visible only to their owner.
 
-### Step 3: Configure Storage Buckets
-1. In the Supabase Dashboard, navigate to **Storage**.
-2. Click **New Bucket**:
-   - Bucket Name: `photos`
-   - Public bucket: **Enabled (ON)** (for high-speed global CDN delivery)
-   - Allowed MIME types: `image/jpeg, image/png, image/webp`
-   - Max file size: `25MB`
-3. In **Storage Policies** for `photos`, add:
-   - **Select (Read)**: Allow public read access to all objects (`bucket_id = 'photos'`).
-   - **Insert (Upload)**: Allow authenticated users to upload into their own folder:
-     ```sql
-     bucket_id = 'photos' AND auth.uid()::text = (storage.foldername(name))[1]
-     ```
-   - **Delete**: Allow users to delete only files in their own folder:
-     ```sql
-     bucket_id = 'photos' AND auth.uid()::text = (storage.foldername(name))[1]
-     ```
-
-### Step 4: Configure Environment Variables
+### Step 3: Configure Environment Variables
 1. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
@@ -48,6 +31,15 @@ When Supabase credentials are not configured, ORBITAL runs gracefully in an offl
    - `Project URL` -> `VITE_SUPABASE_URL`
    - `Project API Keys -> anon (public)` -> `VITE_SUPABASE_ANON_KEY`
 3. Never use the `service_role` key in your frontend application.
+
+### Step 4: Configure Vercel
+1. In the Vercel project, open **Settings -> Environment Variables**.
+2. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with the same project URL and public anon/publishable key used locally.
+3. Apply them to **Production**, **Preview**, and **Development** as needed, then redeploy so Vite includes them in the frontend build.
+4. In Supabase **Authentication -> URL Configuration**, set the Vercel site URL as the Site URL and add the production and preview URLs to the Redirect URLs allow-list.
+5. Sign-up profiles and uploaded photo metadata are stored in Supabase. Published photos use the public `photos` bucket and open at `/photos/<photo-id>`; `vercel.json` routes shared links through the app.
+
+When Supabase is not configured, the local preview uses browser storage; those demo profiles and uploads are not permanent or shared between devices.
 
 ---
 
