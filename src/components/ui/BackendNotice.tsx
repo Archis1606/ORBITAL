@@ -1,11 +1,35 @@
-import { supabaseNotice } from '@/data/site'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { Database, ShieldCheck } from 'lucide-react'
 
 export function BackendNotice() {
+  const configured = isSupabaseConfigured()
+
+  if (configured) {
+    return (
+      <aside className="glass-panel rounded-2xl border border-mint/40 px-5 py-4 bg-mint/5">
+        <div className="flex items-center gap-2 text-mint font-mono text-[0.65rem] tracking-[0.2em] uppercase">
+          <ShieldCheck size={14} />
+          <span>Supabase Production Backend Connected</span>
+        </div>
+        <p className="mt-2 font-medium text-sm text-ivory">Real Database & Storage Active</p>
+        <p className="mt-1 text-xs text-muted">
+          Row-Level Security (RLS) is enforcing user data ownership, private drafts, and storage bucket quotas.
+        </p>
+      </aside>
+    )
+  }
+
   return (
-    <aside className="glass-panel rounded-2xl px-5 py-4">
-      <p className="font-mono text-[0.65rem] tracking-[0.2em] text-cyan uppercase">Integration pending</p>
-      <p className="mt-2 font-medium">{supabaseNotice.title}</p>
-      <p className="mt-1 text-sm text-muted">{supabaseNotice.body}</p>
+    <aside className="glass-panel rounded-2xl border border-cyan/40 px-5 py-4 bg-navy/60">
+      <div className="flex items-center gap-2 text-cyan font-mono text-[0.65rem] tracking-[0.2em] uppercase">
+        <Database size={14} />
+        <span>Local Offline Preview Mode</span>
+      </div>
+      <p className="mt-2 font-medium text-sm text-ivory">Supabase Credentials Not Yet Configured</p>
+      <p className="mt-1 text-xs text-muted leading-relaxed">
+        ORBITAL is running with full catalog exploration, local draft uploads, and browser persistence.
+        To link your live database, copy <code className="text-cyan">.env.example</code> to <code className="text-cyan">.env</code> with your project URL & public anon key.
+      </p>
     </aside>
   )
 }

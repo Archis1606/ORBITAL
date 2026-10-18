@@ -15,7 +15,9 @@ export function ObservatoryFeed() {
         {collections.map((collection) => (
           <article key={collection.id} className="rounded-3xl border border-line bg-panel/70 p-6">
             <div className="flex flex-wrap gap-2">
-              <Badge tone={collection.discipline}>{disciplineLabel(collection.discipline)}</Badge>
+              <Badge tone={collection.discipline === 'all' ? 'neutral' : collection.discipline}>
+                {collection.discipline === 'all' ? 'All Disciplines' : disciplineLabel(collection.discipline)}
+              </Badge>
               <Badge tone="sample">Sample</Badge>
             </div>
             <h3 className="mt-4 font-display text-2xl">{collection.title}</h3>
