@@ -55,6 +55,14 @@ export function AuthPage() {
     }
   }
 
+  const handleSignOut = async () => {
+    setErrorMsg(null)
+    setLoading(true)
+    const result = await signOut()
+    setLoading(false)
+    if (result.error) setErrorMsg(result.error)
+  }
+
   // If already authenticated, show account panel
   if (user) {
     return (
@@ -92,13 +100,15 @@ export function AuthPage() {
                 View Public Profile
               </Button>
             ) : null}
+            {errorMsg ? <p role="alert" className="font-mono text-xs text-danger">{errorMsg}</p> : null}
             <button
               type="button"
-              onClick={() => signOut()}
-              className="mt-2 inline-flex items-center justify-center gap-2 rounded-full border border-danger/40 py-2.5 font-mono text-xs text-danger hover:border-danger hover:bg-danger/10 transition-colors"
+              onClick={() => void handleSignOut()}
+              disabled={loading}
+              className="mt-2 inline-flex items-center justify-center gap-2 rounded-full border border-danger/40 py-2.5 font-mono text-xs text-danger transition-colors hover:border-danger hover:bg-danger/10 disabled:opacity-50"
             >
               <LogOut size={14} />
-              <span>Sign Out of Observatory</span>
+              <span>{loading ? 'Signing out…' : 'Sign Out of Observatory'}</span>
             </button>
           </div>
         </div>

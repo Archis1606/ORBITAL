@@ -2,7 +2,7 @@ import type { AppNotice } from '@/types/models'
 
 export const supabaseNotice: AppNotice = {
   title: 'Supabase is not connected yet',
-  body: 'Authentication, database, and Storage will be wired in a later milestone. This screen is the interface only.',
+  body: 'Add the Supabase URL and public anon key to the environment to enable persistent profiles, social follows, and shareable photo uploads.',
 }
 
 export const navItems = [

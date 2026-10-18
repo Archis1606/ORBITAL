@@ -24,7 +24,7 @@ interface AuthContextType {
   isConfigured: boolean
   signIn: (email: string, password: string) => Promise<{ error?: string }>
   signUp: (email: string, password: string, displayName: string) => Promise<{ error?: string; message?: string }>
-  signOut: () => Promise<void>
+  signOut: () => Promise<{ error?: string }>
   resetPassword: (email: string) => Promise<{ error?: string; message?: string }>
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error?: string }>
   refreshProfile: () => Promise<void>
@@ -188,12 +188,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     if (isConfigured) {
-      await supabase.auth.signOut()
+      try {
+        const { error } = await supabase.auth.signOut()
+        if (error) return { error: error.message }
+      } catch (err: unknown) {
+        return { error: err instanceof Error ? err.message : 'Unable to sign out.' }
+      }
     }
     localStorage.removeItem(LOCAL_USER_STORAGE)
     setUser(null)
     setSession(null)
     setProfile(null)
+    return {}
   }
 
   const resetPassword = async (email: string) => {
