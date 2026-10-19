@@ -217,7 +217,7 @@ export function AstrophotographyPage() {
         </ScrollReveal>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          {astroCreators.map((creator, i) => (
+          {astroCreators.map((creator) => (
             <div
               key={creator.id}
               className="glass-panel flex flex-col justify-between rounded-3xl border border-line p-6 transition-all hover:border-violet/50"
