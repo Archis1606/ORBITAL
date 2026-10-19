@@ -246,7 +246,7 @@ export function UploadStudioPage() {
           .upload(storagePath, activeItem.file, { upsert: true })
 
         if (!uploadError) {
-          const { data } = supabase.storage.from('photos').getPublicUrl(storagePath)
+          const { data } = supabase.storage.from('orbital-photos').getPublicUrl(storagePath)
           if (data?.publicUrl) finalImageUrl = data.publicUrl
         }
         setQueue((prev) =>
