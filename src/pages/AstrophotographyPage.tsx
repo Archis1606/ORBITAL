@@ -4,6 +4,7 @@ import { Telescope, ArrowRight, SlidersHorizontal } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { PhotoGrid } from '@/components/ui/PhotoGrid'
 import { InteractiveStarMap } from '@/components/astronomy/InteractiveStarMap'
+import { ScrollReveal } from '@/components/motion/ScrollReveal'
 import { photosByDiscipline } from '@/data/photos'
 import { collections } from '@/data/collections'
 import { creators } from '@/data/creators'
@@ -50,43 +51,45 @@ export function AstrophotographyPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 md:px-8 space-y-16">
       {/* Hero: Digital Observatory Command Header */}
-      <section className="relative overflow-hidden rounded-3xl border border-violet/30 bg-gradient-to-b from-navy to-void p-8 md:p-12 shadow-2xl">
-        <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-violet/10 blur-[120px] pointer-events-none" />
+      <ScrollReveal y={24} amount={0.1}>
+        <section className="relative overflow-hidden rounded-3xl border border-violet/30 bg-gradient-to-b from-navy to-void p-8 md:p-12 shadow-2xl">
+          <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-violet/10 blur-[120px] pointer-events-none" />
 
-        <div className="relative z-10 max-w-3xl space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-violet/40 bg-violet/15 px-3 py-1 font-mono text-xs text-violet tracking-widest uppercase">
-              <Telescope size={13} />
-              <span>Digital Observatory · Station Alpha</span>
-            </span>
-            <Badge tone="sample">Calibrated Telescope Feeds</Badge>
+          <div className="relative z-10 max-w-3xl space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-violet/40 bg-violet/15 px-3 py-1 font-mono text-xs text-violet tracking-widest uppercase">
+                <Telescope size={13} />
+                <span>Digital Observatory · Station Alpha</span>
+              </span>
+              <Badge tone="sample">Calibrated Telescope Feeds</Badge>
+            </div>
+
+            <h1 className="font-display text-4xl font-normal leading-[1.05] text-ivory md:text-6xl lg:text-7xl">
+              Where photons travel for millions of years to meet our sensors.
+            </h1>
+
+            <p className="text-base text-muted leading-relaxed">
+              From the ionized violet filament ribbons of the Veil Nebula to high-resolution lunar impact craters and
+              total eclipse coronagraphy. Every frame is stacked and photometrically calibrated.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-4 pt-2 font-mono text-xs">
+              <div className="rounded-xl border border-line bg-panel/70 px-3.5 py-2">
+                <span className="text-muted text-[0.68rem] block uppercase">Observatory Plateaus</span>
+                <span className="text-ivory font-semibold">Atacama · Mauna Kea · Teide</span>
+              </div>
+              <div className="rounded-xl border border-line bg-panel/70 px-3.5 py-2">
+                <span className="text-muted text-[0.68rem] block uppercase">Bortle Scale Range</span>
+                <span className="text-cyan font-semibold">Class 1 to Class 3 Pristine Dark</span>
+              </div>
+              <div className="rounded-xl border border-line bg-panel/70 px-3.5 py-2">
+                <span className="text-muted text-[0.68rem] block uppercase">Spectral Emission Passes</span>
+                <span className="text-violet font-semibold">H-alpha (656nm) · [O III] (501nm)</span>
+              </div>
+            </div>
           </div>
-
-          <h1 className="font-display text-4xl font-normal leading-[1.05] text-ivory md:text-6xl lg:text-7xl">
-            Where photons travel for millions of years to meet our sensors.
-          </h1>
-
-          <p className="text-base text-muted leading-relaxed">
-            From the ionized violet filament ribbons of the Veil Nebula to high-resolution lunar impact craters and
-            total eclipse coronagraphy. Every frame is stacked and photometrically calibrated.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-4 pt-2 font-mono text-xs">
-            <div className="rounded-xl border border-line bg-panel/70 px-3.5 py-2">
-              <span className="text-muted text-[0.68rem] block uppercase">Observatory Plateaus</span>
-              <span className="text-ivory font-semibold">Atacama · Mauna Kea · Teide</span>
-            </div>
-            <div className="rounded-xl border border-line bg-panel/70 px-3.5 py-2">
-              <span className="text-muted text-[0.68rem] block uppercase">Bortle Scale Range</span>
-              <span className="text-cyan font-semibold">Class 1 to Class 3 Pristine Dark</span>
-            </div>
-            <div className="rounded-xl border border-line bg-panel/70 px-3.5 py-2">
-              <span className="text-muted text-[0.68rem] block uppercase">Spectral Emission Passes</span>
-              <span className="text-violet font-semibold">H-alpha (656nm) · [O III] (501nm)</span>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </ScrollReveal>
 
       {/* Interactive Celestial Star Map Component */}
       <section>
@@ -102,37 +105,40 @@ export function AstrophotographyPage() {
 
       {/* Curated Celestial Collections */}
       <section>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="font-mono text-xs tracking-widest text-violet uppercase">Curatorial Portfolios</p>
-            <h2 className="mt-1 font-display text-3xl text-ivory">Observatory Sequences</h2>
+        <ScrollReveal y={18} amount={0.15}>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="font-mono text-xs tracking-widest text-violet uppercase">Curatorial Portfolios</p>
+              <h2 className="mt-1 font-display text-3xl text-ivory">Observatory Sequences</h2>
+            </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {astroCollections.map((col) => (
-            <div
-              key={col.id}
-              className="glass-panel group relative overflow-hidden rounded-3xl border border-violet/20 p-6 md:p-8 transition-all hover:border-violet/60"
-            >
-              <div className="flex items-center justify-between">
-                <Badge tone="astrophotography">Astrophotography</Badge>
-                <span className="font-mono text-xs text-muted">
-                  {col.photoIds.length} frames in sequence
-                </span>
-              </div>
-              <h3 className="mt-4 font-display text-2xl text-ivory group-hover:text-violet transition-colors">
-                {col.title}
-              </h3>
-              <p className="mt-2 text-sm text-muted leading-relaxed">{col.description}</p>
-              <Link
-                to={`/archive?discipline=astrophotography`}
-                className="mt-6 inline-flex items-center gap-1.5 font-mono text-xs text-violet hover:underline"
+          {astroCollections.map((col, i) => (
+            <ScrollReveal key={col.id} y={20} delay={i * 0.08} amount={0.08}>
+              <div
+                className="glass-panel group relative overflow-hidden rounded-3xl border border-violet/20 p-6 md:p-8 transition-all hover:border-violet/60"
               >
-                <span>Examine collection frames</span>
-                <ArrowRight size={13} />
-              </Link>
-            </div>
+                <div className="flex items-center justify-between">
+                  <Badge tone="astrophotography">Astrophotography</Badge>
+                  <span className="font-mono text-xs text-muted">
+                    {col.photoIds.length} frames in sequence
+                  </span>
+                </div>
+                <h3 className="mt-4 font-display text-2xl text-ivory group-hover:text-violet transition-colors">
+                  {col.title}
+                </h3>
+                <p className="mt-2 text-sm text-muted leading-relaxed">{col.description}</p>
+                <Link
+                  to={`/archive?discipline=astrophotography`}
+                  className="mt-6 inline-flex items-center gap-1.5 font-mono text-xs text-violet hover:underline"
+                >
+                  <span>Examine collection frames</span>
+                  <ArrowRight size={13} />
+                </Link>
+              </div>
+            </ScrollReveal>
           ))}
         </div>
       </section>
@@ -203,13 +209,15 @@ export function AstrophotographyPage() {
 
       {/* Featured Astrophotographers */}
       <section className="border-t border-line/60 pt-10">
-        <div className="mb-6">
-          <p className="font-mono text-xs tracking-widest text-violet uppercase">Field Observers</p>
-          <h2 className="mt-1 font-display text-3xl text-ivory">Featured Astrophotographers</h2>
-        </div>
+        <ScrollReveal y={16} amount={0.12}>
+          <div className="mb-6">
+            <p className="font-mono text-xs tracking-widest text-violet uppercase">Field Observers</p>
+            <h2 className="mt-1 font-display text-3xl text-ivory">Featured Astrophotographers</h2>
+          </div>
+        </ScrollReveal>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          {astroCreators.map((creator) => (
+          {astroCreators.map((creator, i) => (
             <div
               key={creator.id}
               className="glass-panel flex flex-col justify-between rounded-3xl border border-line p-6 transition-all hover:border-violet/50"

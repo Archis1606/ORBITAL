@@ -85,6 +85,15 @@ export function PhotoDetailPage() {
     if (nextPhoto) navigate(`/photos/${nextPhoto.id}`)
   }, [nextPhoto, navigate])
 
+  // Smart close: go back in history if available, otherwise go to archive
+  const handleClose = useCallback(() => {
+    if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate('/archive')
+    }
+  }, [navigate])
+
   // Fullscreen toggle
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -113,7 +122,7 @@ export function PhotoDetailPage() {
         if (drawerOpen) {
           setDrawerOpen(false)
         } else {
-          navigate(-1)
+          handleClose()
         }
       } else if (event.key === 'ArrowLeft') {
         goToPrev()
@@ -139,7 +148,7 @@ export function PhotoDetailPage() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [navigate, goToPrev, goToNext, toggleFullscreen, drawerOpen])
+  }, [navigate, goToPrev, goToNext, toggleFullscreen, drawerOpen, handleClose])
 
   // Pan dragging logic when zoomed in
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -232,7 +241,7 @@ export function PhotoDetailPage() {
         <div className="flex items-center gap-3 overflow-hidden">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={handleClose}
             className="flex items-center gap-1.5 rounded-full border border-line p-2 text-ivory hover:border-cyan hover:text-cyan transition-colors"
             title="Close viewer (Esc)"
             aria-label="Close viewer"
@@ -309,6 +318,17 @@ export function PhotoDetailPage() {
           zoomLevel > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default',
         )}
       >
+        {/* Floating Close Button — top-right corner of stage */}
+        <button
+          type="button"
+          onClick={handleClose}
+          className="absolute right-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-line/60 bg-void/70 text-ivory/70 backdrop-blur-md transition-all duration-200 hover:border-cyan hover:bg-void hover:text-cyan hover:scale-110 focus-visible:ring-2 focus-visible:ring-cyan"
+          title="Close viewer (Esc)"
+          aria-label="Close photo viewer"
+        >
+          <X size={18} />
+        </button>
+
         {/* Next / Previous Lateral Navigation Chevrons */}
         <button
           type="button"

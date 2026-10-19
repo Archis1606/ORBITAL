@@ -47,10 +47,20 @@ export function SiteHeader() {
                 )
               }
             >
-              <div className="h-4 w-4 rounded-full bg-cyan/30 text-cyan flex items-center justify-center text-[0.6rem] font-bold">
-                {profile?.display_name ? profile.display_name[0].toUpperCase() : 'U'}
-              </div>
-              <span className="truncate max-w-[7rem]">@{profile?.handle || 'observer'}</span>
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.display_name || profile.handle || 'Profile'}
+                  className="h-5 w-5 rounded-full object-cover border border-cyan/30 shrink-0"
+                />
+              ) : (
+                <div className="h-5 w-5 rounded-full bg-cyan/30 text-cyan flex items-center justify-center text-[0.6rem] font-bold shrink-0">
+                  {profile?.display_name ? profile.display_name[0].toUpperCase() : (profile?.handle ? profile.handle[0].toUpperCase() : 'U')}
+                </div>
+              )}
+              <span className="truncate max-w-[7rem]">
+                {profile?.display_name || profile?.handle || 'Observer'}
+              </span>
             </NavLink>
           ) : (
             <NavLink

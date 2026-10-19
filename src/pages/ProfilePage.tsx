@@ -13,6 +13,8 @@ import {
   FolderOpen,
   ArrowRight,
   ShieldCheck,
+  Loader2,
+  ImageOff,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -21,10 +23,12 @@ import { PhotoGrid } from '@/components/ui/PhotoGrid'
 import { useAuth } from '@/context/AuthContext'
 import { getCreatorByHandle } from '@/data/creators'
 import { getAllAvailablePhotos, getFollowingIds, toggleFollowUser, getStoredCollections } from '@/services/photoService'
+import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { disciplineLabel } from '@/lib/format'
-import type { Creator } from '@/types/models'
+import type { Creator, Photo } from '@/types/models'
 import { cn } from '@/lib/cn'
+
 
 export function ProfilePage() {
   const { handle } = useParams<{ handle: string }>()
@@ -96,16 +100,97 @@ export function ProfilePage() {
 
   useDocumentTitle(creator ? `${creator.displayName} (@${creator.handle}) — ORBITAL` : 'Photographer Profile — ORBITAL')
 
-  // Retrieve photos attributed to this creator
-  const allPhotos = getAllAvailablePhotos()
-  const authorPhotos = useMemo(() => {
-    if (!creator) return []
-    return allPhotos.filter(
-      (photo) =>
-        photo.creatorId === creator.id ||
-        (creator.handle && photo.creatorId.toLowerCase() === creator.handle.toLowerCase()),
-    )
-  }, [allPhotos, creator])
+  // Retrieve photos attributed to this creator — local catalog + Supabase
+  const localPhotos = getAllAvailablePhotos()
+  const [authorPhotos, setAuthorPhotos] = useState<Photo[]>([])
+  const [photosLoading, setPhotosLoading] = useState(true)
+  const [photosError, setPhotosError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!creator) {
+      setAuthorPhotos([])
+      setPhotosLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setPhotosLoading(true)
+    setPhotosError(null)
+
+    async function loadPhotos() {
+      // Start with local catalog photos matching this creator
+      const local = localPhotos.filter(
+        (photo) =>
+          photo.creatorId === creator!.id ||
+          (creator!.handle && photo.creatorId.toLowerCase() === creator!.handle.toLowerCase()),
+      )
+
+      // If Supabase is available and the creator has a real user_id, query for their uploaded photos
+      if (isSupabaseConfigured() && creator!.userId) {
+        try {
+          const { data, error } = await supabase
+            .from('photos')
+            .select('*')
+            .eq('user_id', creator!.userId)
+            .eq('status', 'published')
+            .order('created_at', { ascending: false })
+
+          if (!cancelled) {
+            if (error) {
+              // Table may not exist yet — fall back to local data silently
+              setAuthorPhotos(local)
+            } else if (data && data.length > 0) {
+              // Map database rows to Photo model
+              type PhotoRow = import('@/types/database').Database['public']['Tables']['photos']['Row']
+              const mapped: Photo[] = (data as unknown as PhotoRow[]).map((row) => ({
+                id: row.id,
+                userId: row.user_id,
+                title: row.title,
+                discipline: row.discipline,
+                caption: row.caption || '',
+                categoryTag: row.category_tag || undefined,
+                tags: row.tags || [],
+                location: row.location_name || '',
+                capturedAt: row.captured_at || '',
+                camera: row.camera || '',
+                optics: row.optics || '',
+                exposure: row.exposure || '',
+                creatorId: row.user_id,
+                unsplashId: '',
+                customImageUrl: row.image_url,
+                thumbnailUrl: row.thumbnail_url || undefined,
+                imageAlt: row.title,
+                width: row.width || 1920,
+                height: row.height || 1080,
+                featured: row.featured,
+                sample: 'USER',
+                likesCount: row.likes_count,
+                viewsCount: row.views_count,
+                status: row.status,
+                license: row.license,
+              }))
+              // Merge: put DB photos first, then local-only ones not already in DB
+              const dbIds = new Set(mapped.map((p) => p.id))
+              const merged = [...mapped, ...local.filter((p) => !dbIds.has(p.id))]
+              setAuthorPhotos(merged)
+            } else {
+              setAuthorPhotos(local)
+            }
+          }
+        } catch {
+          if (!cancelled) setAuthorPhotos(local)
+        }
+      } else {
+        if (!cancelled) setAuthorPhotos(local)
+      }
+
+      if (!cancelled) setPhotosLoading(false)
+    }
+
+    loadPhotos()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creator?.id, creator?.userId])
 
   // Retrieve public collections created by this creator
   const allCollections = getStoredCollections()
@@ -357,7 +442,7 @@ export function ProfilePage() {
               )}
             >
               <Camera size={14} />
-              <span>Published Photographs ({authorPhotos.length})</span>
+              <span>Published Photographs ({photosLoading ? '…' : authorPhotos.length})</span>
             </button>
 
             <button
@@ -378,11 +463,24 @@ export function ProfilePage() {
 
         {/* Tab 1: Photographs */}
         {activeTab === 'photos' ? (
-          <PhotoGrid
-            photos={authorPhotos}
-            emptyTitle="No published photographs yet"
-            emptyBody="This photographer has not published any frames to the catalog yet."
-          />
+          photosLoading ? (
+            <div className="flex items-center justify-center py-16 gap-3 text-muted font-mono text-xs">
+              <Loader2 size={18} className="animate-spin text-cyan" />
+              <span>Loading photographs…</span>
+            </div>
+          ) : photosError ? (
+            <div className="glass-panel rounded-3xl border border-danger/30 p-10 text-center space-y-2">
+              <ImageOff size={32} className="mx-auto text-muted/50 mb-3" />
+              <p className="font-display text-xl text-ivory">Unable to load photographs</p>
+              <p className="text-xs font-mono text-muted">{photosError}</p>
+            </div>
+          ) : (
+            <PhotoGrid
+              photos={authorPhotos}
+              emptyTitle="No photographs yet"
+              emptyBody="This photographer has not published any frames to the catalog yet."
+            />
+          )
         ) : (
           /* Tab 2: Collections */
           <div className="grid gap-6 md:grid-cols-2">
