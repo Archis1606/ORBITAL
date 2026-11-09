@@ -58,7 +58,7 @@ export async function findCreatorByUserId(userId: string): Promise<Creator | und
 
 export async function searchCreators(query: string): Promise<Creator[]> {
   const term = query.trim()
-  if (term.length < 2) return []
+  if (!term) return []
 
   const localMatches = sampleCreators.filter((creator) =>
     `${creator.displayName} ${creator.handle}`.toLowerCase().includes(term.toLowerCase()),
@@ -72,8 +72,7 @@ export async function searchCreators(query: string): Promise<Creator[]> {
     supabase.from('profiles').select('*').ilike('display_name', pattern).limit(6),
   ])
 
-  if (byHandle.error) throw new Error(byHandle.error.message)
-  if (byName.error) throw new Error(byName.error.message)
+  if (byHandle.error || byName.error) return localMatches.slice(0, 6)
 
   const liveMatches = [...(byHandle.data ?? []), ...(byName.data ?? [])].map(mapProfile)
   const results = new Map(liveMatches.map((creator) => [creator.handle.toLowerCase(), creator]))

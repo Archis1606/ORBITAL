@@ -69,12 +69,20 @@ export function AuthPage() {
       <div className="mx-auto max-w-lg px-4 py-16">
         <div className="glass-panel rounded-3xl border border-line p-8 space-y-6">
           <div className="flex items-center gap-3 border-b border-line/60 pb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan/15 text-cyan border border-cyan/40 font-mono text-lg">
-              {profile?.display_name ? profile.display_name[0].toUpperCase() : 'U'}
-            </div>
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={`${profile.display_name || 'Observer'} profile`}
+                className="h-12 w-12 rounded-full border border-cyan/40 object-cover"
+              />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan/40 bg-cyan/15 font-mono text-lg text-cyan">
+                {profile?.display_name ? profile.display_name[0].toUpperCase() : 'U'}
+              </div>
+            )}
             <div>
-              <h1 className="font-display text-2xl text-ivory">Observatory Active</h1>
-              <p className="font-mono text-xs text-muted">{user.email}</p>
+              <h1 className="font-display text-2xl text-ivory">{profile?.display_name || 'Observer'}</h1>
+              <p className="font-mono text-xs text-muted">@{profile?.handle || 'observer'}</p>
             </div>
           </div>
 
