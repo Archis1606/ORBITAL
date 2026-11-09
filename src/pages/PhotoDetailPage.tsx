@@ -51,6 +51,10 @@ export function PhotoDetailPage() {
   const [activeTab, setActiveTab] = useState<'details' | 'comparison' | 'specs'>('details')
   const stageRef = useRef<HTMLDivElement>(null)
 
+  const closeViewer = useCallback(() => {
+    navigate('/archive')
+  }, [navigate])
+
   // Fetch photo and creator
   useEffect(() => {
     let cancelled = false
@@ -145,7 +149,7 @@ export function PhotoDetailPage() {
         if (drawerOpen) {
           setDrawerOpen(false)
         } else {
-          navigate(-1)
+          closeViewer()
         }
       } else if (event.key === 'ArrowLeft') {
         goToPrev()
@@ -171,7 +175,7 @@ export function PhotoDetailPage() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [navigate, goToPrev, goToNext, toggleFullscreen, drawerOpen])
+  }, [closeViewer, goToPrev, goToNext, toggleFullscreen, drawerOpen])
 
   // Pan dragging logic when zoomed in
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -262,16 +266,6 @@ export function PhotoDetailPage() {
       <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-line/40 bg-void/85 px-4 md:px-6 backdrop-blur-md">
         {/* Left: Frame Title and Discipline */}
         <div className="flex items-center gap-3 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 rounded-full border border-line p-2 text-ivory hover:border-cyan hover:text-cyan transition-colors"
-            title="Close viewer (Esc)"
-            aria-label="Close viewer"
-          >
-            <X size={16} />
-          </button>
-
           <div className="truncate">
             <div className="flex items-center gap-2">
               <h1 className="truncate font-display text-base font-medium text-ivory">{photo.title}</h1>
@@ -299,6 +293,16 @@ export function PhotoDetailPage() {
           >
             {copiedShare ? <Check size={14} className="text-mint" /> : <Share2 size={14} />}
             <span className="hidden sm:inline">{copiedShare ? 'Copied' : 'Share'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={closeViewer}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-navy/60 text-ivory transition-colors hover:border-danger/60 hover:bg-danger/10 hover:text-danger"
+            title="Close photo"
+            aria-label="Close photo and return to the gallery"
+          >
+            <X size={17} aria-hidden="true" />
           </button>
 
           {/* Metadata Drawer Toggle */}

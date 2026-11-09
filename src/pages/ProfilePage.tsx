@@ -23,6 +23,7 @@ import { getCreatorByHandle } from '@/data/creators'
 import { fetchPhotosByUserId, getAllAvailablePhotos, getFollowingIds, toggleFollowUser, getStoredCollections } from '@/services/photoService'
 import { findCreatorByHandle, getCreatorFollowState, toggleCreatorFollow } from '@/services/creatorService'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { disciplineLabel } from '@/lib/format'
 import type { Creator, Photo } from '@/types/models'
@@ -82,6 +83,7 @@ export function ProfilePage() {
   const [editBio, setEditBio] = useState('')
   const [editLocation, setEditLocation] = useState('')
   const [editAvatar, setEditAvatar] = useState('')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [editTwitter, setEditTwitter] = useState('')
   const [editInstagram, setEditInstagram] = useState('')
   const [editWebsite, setEditWebsite] = useState('')
@@ -109,9 +111,9 @@ export function ProfilePage() {
           setEditInstagram(resolvedCreator.socialLinks?.instagram || '')
           setEditWebsite(resolvedCreator.socialLinks?.website || '')
         }
-      } catch (error: unknown) {
+      } catch {
         if (!cancelled) {
-          setProfileError(error instanceof Error ? error.message : 'Unable to load this profile.')
+          setProfileError('Profile data is unavailable. Check that the Supabase database migrations are applied.')
         }
       } finally {
         if (!cancelled) setCreatorLoading(false)
@@ -152,9 +154,9 @@ export function ProfilePage() {
         } else if (!cancelled) {
           setAuthorPhotos(localPhotos)
         }
-      } catch (error: unknown) {
+      } catch {
         if (!cancelled) {
-          setProfileError(error instanceof Error ? error.message : 'Unable to load this profile.')
+          setProfileError('Profile community data is unavailable. Check that the Supabase database migrations are applied.')
           setAuthorPhotos(localPhotos)
         }
       }
@@ -214,37 +216,54 @@ export function ProfilePage() {
     e.preventDefault()
     if (!creator) return
 
-    const result = await updateProfile({
-      display_name: editName,
-      bio: editBio,
-      location: editLocation,
-      avatar_url: editAvatar || null,
-      social_twitter: editTwitter || null,
-      social_instagram: editInstagram || null,
-      social_website: editWebsite || null,
-    })
-    if (result.error) {
-      setProfileError(result.error)
-      return
-    }
-
-    const updated = {
-      ...creator,
-      displayName: editName,
-      bio: editBio,
-      location: editLocation,
-      avatarUrl: editAvatar || undefined,
-      socialLinks: {
-        twitter: editTwitter || undefined,
-        instagram: editInstagram || undefined,
-        website: editWebsite || undefined,
-      },
-    }
-
-    setCreator(updated)
-
     setProfileError(null)
-    setIsEditing(false)
+    try {
+      let avatarUrl = editAvatar || null
+      if (avatarFile) {
+        if (!user || !isSupabaseConfigured()) {
+          setProfileError('Profile photo uploads require a connected account and Supabase Storage.')
+          return
+        }
+        const extension = avatarFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+        const path = `${user.id}/avatar.${extension}`
+        const { error: uploadError } = await supabase.storage
+          .from('photos')
+          .upload(path, avatarFile, { contentType: avatarFile.type, upsert: true })
+        if (uploadError) throw new Error(uploadError.message)
+        const { data } = supabase.storage.from('photos').getPublicUrl(path)
+        avatarUrl = `${data.publicUrl}?v=${Date.now()}`
+      }
+
+      const result = await updateProfile({
+        display_name: editName,
+        bio: editBio,
+        location: editLocation,
+        avatar_url: avatarUrl,
+        social_twitter: editTwitter || null,
+        social_instagram: editInstagram || null,
+        social_website: editWebsite || null,
+      })
+      if (result.error) throw new Error(result.error)
+
+      const updated = {
+        ...creator,
+        displayName: editName,
+        bio: editBio,
+        location: editLocation,
+        avatarUrl: avatarUrl || undefined,
+        socialLinks: {
+          twitter: editTwitter || undefined,
+          instagram: editInstagram || undefined,
+          website: editWebsite || undefined,
+        },
+      }
+
+      setCreator(updated)
+      setAvatarFile(null)
+      setIsEditing(false)
+    } catch (error: unknown) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to save profile changes.')
+    }
   }
 
   if (!creator && creatorLoading) {
@@ -572,12 +591,37 @@ export function ProfilePage() {
 
             <div>
               <label className="block font-mono text-xs text-muted uppercase tracking-wider mb-1">
-                Avatar Image URL
+                Choose Profile Picture
+              </label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (!file) return
+                  if (file.size > 5 * 1024 * 1024) {
+                    setProfileError('Choose an image smaller than 5 MB.')
+                    return
+                  }
+                  setAvatarFile(file)
+                  setEditAvatar('')
+                  setProfileError(null)
+                }}
+                className="w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ivory file:mr-3 file:rounded-full file:border-0 file:bg-cyan/15 file:px-3 file:py-1 file:text-xs file:text-cyan"
+              />
+              <p className="mt-1 font-mono text-[0.65rem] text-muted">
+                JPEG, PNG, or WebP up to 5 MB. Saved to your public profile.
+              </p>
+              <label className="mt-3 block font-mono text-[0.68rem] text-muted uppercase tracking-wider mb-1">
+                Or use an image URL
               </label>
               <input
                 type="url"
                 value={editAvatar}
-                onChange={(e) => setEditAvatar(e.target.value)}
+                onChange={(e) => {
+                  setEditAvatar(e.target.value)
+                  setAvatarFile(null)
+                }}
                 placeholder="https://..."
                 className="w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ivory focus:border-cyan focus:outline-none"
               />

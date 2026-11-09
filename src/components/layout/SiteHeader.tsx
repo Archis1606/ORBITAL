@@ -1,5 +1,5 @@
 import { ChevronDown, LogOut, Menu, X, User } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { navItems } from '@/data/site'
 import { useAuth } from '@/context/AuthContext'
@@ -15,8 +15,28 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [mobileProfileMenuOpen, setMobileProfileMenuOpen] = useState(false)
   const [authActionError, setAuthActionError] = useState<string | null>(null)
+  const profileMenuRef = useRef<HTMLDivElement>(null)
   const { user, profile, signOut } = useAuth()
+
+  useEffect(() => {
+    if (!profileMenuOpen) return
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) setProfileMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProfileMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [profileMenuOpen])
 
   const handleSignOut = async () => {
     const result = await signOut()
@@ -51,7 +71,7 @@ export function SiteHeader() {
 
           {/* User Profile / Auth Action */}
           {user ? (
-            <div className="relative ml-2">
+            <div className="relative ml-2" ref={profileMenuRef}>
               <button
                 type="button"
                 aria-haspopup="menu"
@@ -59,10 +79,18 @@ export function SiteHeader() {
                 onClick={() => setProfileMenuOpen((value) => !value)}
                 className="inline-flex items-center gap-2 rounded-full border border-line/70 bg-panel/70 px-3.5 py-1.5 text-xs font-mono text-ivory transition-all hover:border-cyan/50"
               >
-                <div className="h-4 w-4 rounded-full bg-cyan/30 text-cyan flex items-center justify-center text-[0.6rem] font-bold">
-                  {profile?.display_name ? profile.display_name[0].toUpperCase() : 'U'}
-                </div>
-                <span className="truncate max-w-[7rem]">@{profile?.handle || 'observer'}</span>
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-6 w-6 rounded-full border border-cyan/30 object-cover"
+                  />
+                ) : (
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan/30 text-[0.6rem] font-bold text-cyan">
+                    {profile?.display_name ? profile.display_name[0].toUpperCase() : 'U'}
+                  </span>
+                )}
+                <span className="max-w-[8rem] truncate">{profile?.display_name || 'Observer'}</span>
                 <ChevronDown size={13} aria-hidden="true" />
               </button>
               {profileMenuOpen ? (
@@ -111,26 +139,26 @@ export function SiteHeader() {
           )}
         </nav>
 
-        {/* Mobile Hamburger Toggle */}
-        <button
-          type="button"
-          className="rounded-full border border-line p-2 text-ivory xl:hidden hover:border-cyan"
-          aria-expanded={open}
-          aria-controls="mobile-nav"
-          onClick={() => setOpen((value) => !value)}
-        >
-          {open ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
-          <span className="sr-only">Toggle navigation menu</span>
-        </button>
+        {/* Compact header actions keep profile search available on tablet and mobile. */}
+        <div className="flex items-center gap-2 xl:hidden">
+          <ProfileSearch compact onSelect={() => setOpen(false)} />
+          <button
+            type="button"
+            className="rounded-full border border-line p-2 text-ivory hover:border-cyan"
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
+            <span className="sr-only">Toggle navigation menu</span>
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer */}
       {open ? (
         <nav id="mobile-nav" className="border-t border-line bg-void/95 px-6 py-5 xl:hidden backdrop-blur-xl" aria-label="Mobile Navigation">
           <ul className="flex flex-col gap-3">
-            <li className="pb-2">
-              <ProfileSearch onSelect={() => setOpen(false)} />
-            </li>
             {navItems.map((item) => (
               <li key={item.to}>
                 <NavLink to={item.to} className={linkClass} onClick={() => setOpen(false)}>
@@ -140,23 +168,56 @@ export function SiteHeader() {
             ))}
             <li className="pt-2 border-t border-line/60">
               {user ? (
-                <div className="flex flex-col gap-3">
-                  <NavLink
-                    to={profile?.handle ? `/creators/${profile.handle}` : '/auth'}
-                    className={linkClass}
-                    onClick={() => setOpen(false)}
-                  >
-                    {`View Profile (@${profile?.handle || 'observer'})`}
-                  </NavLink>
-                  {authActionError ? <p role="alert" className="font-mono text-xs text-danger">{authActionError}</p> : null}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => void handleSignOut()}
-                    className="inline-flex items-center gap-2 self-start rounded-full border border-danger/40 px-3.5 py-1.5 text-xs font-mono text-danger transition-colors hover:border-danger hover:bg-danger/10"
+                    aria-haspopup="menu"
+                    aria-expanded={mobileProfileMenuOpen}
+                    onClick={() => setMobileProfileMenuOpen((value) => !value)}
+                    className="flex w-full items-center justify-between rounded-full border border-line/70 bg-panel/70 px-3.5 py-2 text-left text-xs font-mono text-ivory"
                   >
-                    <LogOut size={14} aria-hidden="true" />
-                    <span>Sign Out</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" />
+                      ) : (
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cyan/20 text-cyan">
+                          {profile?.display_name?.[0]?.toUpperCase() || 'U'}
+                        </span>
+                      )}
+                      <span className="truncate">{profile?.display_name || 'Observer'}</span>
+                    </span>
+                    <ChevronDown size={14} aria-hidden="true" />
                   </button>
+                  {mobileProfileMenuOpen ? (
+                    <div role="menu" className="mt-2 rounded-2xl border border-line bg-navy-deep p-2">
+                      {authActionError ? (
+                        <p role="alert" className="px-3 py-2 text-xs text-danger">{authActionError}</p>
+                      ) : null}
+                      <NavLink
+                        role="menuitem"
+                        to={profile?.handle ? `/creators/${profile.handle}` : '/auth'}
+                        onClick={() => {
+                          setMobileProfileMenuOpen(false)
+                          setOpen(false)
+                        }}
+                        className="block rounded-xl px-3 py-2 text-xs font-mono text-ivory hover:bg-cyan/10 hover:text-cyan"
+                      >
+                        View Profile
+                      </NavLink>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMobileProfileMenuOpen(false)
+                          void handleSignOut()
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-mono text-danger hover:bg-danger/10"
+                      >
+                        <LogOut size={14} aria-hidden="true" />
+                        Sign Out
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <NavLink to="/auth" className={linkClass} onClick={() => setOpen(false)}>

@@ -4,7 +4,13 @@ import { Link } from 'react-router-dom'
 import { searchCreators } from '@/services/creatorService'
 import type { Creator } from '@/types/models'
 
-export function ProfileSearch({ onSelect }: { onSelect?: () => void }) {
+export function ProfileSearch({
+  onSelect,
+  compact = false,
+}: {
+  onSelect?: () => void
+  compact?: boolean
+}) {
   const inputId = useId()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Creator[]>([])
@@ -13,10 +19,9 @@ export function ProfileSearch({ onSelect }: { onSelect?: () => void }) {
 
   useEffect(() => {
     const term = query.trim()
-    if (term.length < 2) return
+    if (!term) return
 
     let cancelled = false
-    setLoading(true)
     const timeout = window.setTimeout(() => {
       searchCreators(term)
         .then((creators) => {
@@ -42,7 +47,7 @@ export function ProfileSearch({ onSelect }: { onSelect?: () => void }) {
     }
   }, [query])
 
-  const isOpen = query.trim().length >= 2
+  const isOpen = Boolean(query.trim())
 
   return (
     <div className="relative">
@@ -58,8 +63,8 @@ export function ProfileSearch({ onSelect }: { onSelect?: () => void }) {
           onChange={(event) => {
             const value = event.target.value
             setQuery(value)
-            if (value.trim().length < 2) {
-              setResults([])
+            setResults([])
+            if (!value.trim()) {
               setError(null)
               setLoading(false)
             } else {
@@ -67,9 +72,9 @@ export function ProfileSearch({ onSelect }: { onSelect?: () => void }) {
               setError(null)
             }
           }}
-          placeholder="Find observers"
+          placeholder={compact ? 'Search profiles' : 'Find observers'}
           autoComplete="off"
-          className="w-32 bg-transparent px-2 py-2 text-xs text-ivory outline-none placeholder:text-muted/70 xl:w-40"
+          className={`${compact ? 'w-24 sm:w-32' : 'w-32 xl:w-40'} bg-transparent px-2 py-2 text-xs text-ivory outline-none placeholder:text-muted/70`}
         />
       </div>
       {isOpen ? (
