@@ -155,10 +155,7 @@ export function ProfilePage() {
           setAuthorPhotos(localPhotos)
         }
       } catch {
-        if (!cancelled) {
-          setProfileError('Profile community data is unavailable. Check that the Supabase database migrations are applied.')
-          setAuthorPhotos(localPhotos)
-        }
+        if (!cancelled) setAuthorPhotos(localPhotos)
       }
     }
 
