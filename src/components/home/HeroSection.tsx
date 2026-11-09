@@ -54,7 +54,7 @@ export function HeroSection() {
           data-hero-copy
           className="mt-4 max-w-4xl font-display text-5xl leading-[0.95] font-semibold tracking-tight md:text-7xl lg:text-8xl"
         >
-          Light, altitude, and the long exposure.
+          Site under maintinance. Please check back later for updates and new content.
         </h1>
         <p data-hero-copy className="mt-6 max-w-xl text-lg text-ivory/80">
           ORBITAL is a cinematic home for astrophotography and aviation photography. The frames below are labeled sample
